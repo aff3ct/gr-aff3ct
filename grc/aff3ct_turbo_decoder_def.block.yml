@@ -1,0 +1,104 @@
+id: aff3ct_turbo_decoder_def
+label: AFF3CT Turbo Decoder Definition
+category: '[AFF3CT]'
+flags: [ show_id ]
+
+parameters:
+-   id: ndim
+    label: Parallelism
+    dtype: enum
+    default: '0'
+    options: ['0', '1', '2']
+-   id: dim1
+    label: Dimension 1
+    dtype: int
+    default: '1'
+    hide: ${ ('none' if (int(ndim) >= 1) else 'all') }
+-   id: dim2
+    label: Dimension 2
+    dtype: int
+    default: '4'
+    hide: ${ ('none' if (int(ndim) >= 2) else 'all') }
+-   id: K
+    label: Info bits (K)
+    dtype: int
+    default: '424'
+-   id: N
+    label: Coded bits (N)
+    dtype: int
+    default: '1284'
+-   id: n_ite
+    label: Iterations
+    dtype: int
+    default: '6'
+-   id: interleaver
+    label: Interleaver
+    dtype: enum
+    default: AUTO
+    options: [AUTO, LTE, RANDOM]
+    option_labels: [Auto, LTE, Random]
+-   id: seed
+    label: Interleaver seed
+    dtype: int
+    default: '0'
+    hide: part
+-   id: precision
+    label: Precision
+    dtype: enum
+    default: int16
+    options: [int16, float]
+    option_labels: [int16 (fast), float]
+-   id: simd
+    label: SIMD strategy
+    dtype: enum
+    default: INTER
+    options: [INTER, INTRA, SEQ]
+    option_labels: [Inter-frame (fast), Intra-frame, Sequential]
+    hide: part
+-   id: frames
+    label: Frames per call
+    dtype: int
+    default: '0'
+    hide: part
+-   id: llr_scale
+    label: LLR scale
+    dtype: float
+    default: '1.0'
+-   id: aff3ct_args
+    label: AFF3CT args
+    dtype: string
+    default: ''
+    hide: part
+value: ${ aff3ct.turbo_decoder.make(K, N, n_ite, interleaver, seed, precision, simd, frames, llr_scale, aff3ct_args) }
+
+templates:
+    imports: from gnuradio import aff3ct
+    var_make: |-
+        % if int(ndim)==0:
+        self.${id} = ${id} = aff3ct.turbo_decoder.make(${K}, ${N}, ${n_ite}, '${interleaver}', ${seed}, '${precision}', '${simd}', ${frames}, ${llr_scale}, ${aff3ct_args})
+        % elif int(ndim)==1:
+        self.${id} = ${id} = list(map((lambda a: aff3ct.turbo_decoder.make(${K}, ${N}, ${n_ite}, '${interleaver}', ${seed}, '${precision}', '${simd}', ${frames}, ${llr_scale}, ${aff3ct_args})), range(0, ${dim1})))
+        % else:
+        self.${id} = ${id} = list(map((lambda b: list(map((lambda a: aff3ct.turbo_decoder.make(${K}, ${N}, ${n_ite}, '${interleaver}', ${seed}, '${precision}', '${simd}', ${frames}, ${llr_scale}, ${aff3ct_args})), range(0, ${dim2})))), range(0, ${dim1})))
+        % endif
+
+documentation: |-
+    AFF3CT turbo decoder (BCJR max-log, SIMD), matching the AFF3CT Turbo Encoder Definition
+    (same K, N, interleaver and seed).
+
+    Input: float LLRs, AFF3CT convention: LLR = log(P(b=0)/P(b=1)), positive means bit 0.
+    For BPSK (0 -> +1) on AWGN: LLR = 2y/sigma^2. Output: K unpacked bits per frame.
+
+    Several frames are decoded per call (Frames per call, 0 = SIMD width: 32 in int16 with
+    AVX-512, 16 with AVX2, 8 with SSE/NEON). Input frame = frames * N LLRs.
+
+    int16: LLRs are multiplied by LLR scale then quantized on 6 bits with 3 fractional bits
+    (saturation at +/-3.875), as in the AFF3CT simulator.
+
+    Multithreading: set Parallelism to 1 and Dimension 1 to the number of decoders, then
+    choose the threading type in the FEC Extended Decoder (capillary: power of 2).
+
+    AFF3CT args: extra AFF3CT command line arguments, e.g. "--dec-sf-type LTE_VEC" or
+    "--dec-sub-max MAXS".
+
+file_format: 1

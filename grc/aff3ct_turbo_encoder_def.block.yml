@@ -1,0 +1,72 @@
+id: aff3ct_turbo_encoder_def
+label: AFF3CT Turbo Encoder Definition
+category: '[AFF3CT]'
+flags: [ show_id ]
+
+parameters:
+-   id: ndim
+    label: Parallelism
+    dtype: enum
+    default: '0'
+    options: ['0', '1', '2']
+-   id: dim1
+    label: Dimension 1
+    dtype: int
+    default: '1'
+    hide: ${ ('none' if (int(ndim) >= 1) else 'all') }
+-   id: dim2
+    label: Dimension 2
+    dtype: int
+    default: '4'
+    hide: ${ ('none' if (int(ndim) >= 2) else 'all') }
+-   id: K
+    label: Info bits (K)
+    dtype: int
+    default: '424'
+-   id: N
+    label: Coded bits (N)
+    dtype: int
+    default: '1284'
+-   id: interleaver
+    label: Interleaver
+    dtype: enum
+    default: AUTO
+    options: [AUTO, LTE, RANDOM]
+    option_labels: [Auto, LTE, Random]
+-   id: seed
+    label: Interleaver seed
+    dtype: int
+    default: '0'
+    hide: part
+-   id: aff3ct_args
+    label: AFF3CT args
+    dtype: string
+    default: ''
+    hide: part
+value: ${ aff3ct.turbo_encoder.make(K, N, interleaver, seed, aff3ct_args) }
+
+templates:
+    imports: from gnuradio import aff3ct
+    var_make: |-
+        % if int(ndim)==0:
+        self.${id} = ${id} = aff3ct.turbo_encoder.make(${K}, ${N}, '${interleaver}', ${seed}, ${aff3ct_args})
+        % elif int(ndim)==1:
+        self.${id} = ${id} = list(map((lambda a: aff3ct.turbo_encoder.make(${K}, ${N}, '${interleaver}', ${seed}, ${aff3ct_args})), range(0, ${dim1})))
+        % else:
+        self.${id} = ${id} = list(map((lambda b: list(map((lambda a: aff3ct.turbo_encoder.make(${K}, ${N}, '${interleaver}', ${seed}, ${aff3ct_args})), range(0, ${dim2})))), range(0, ${dim1})))
+        % endif
+
+documentation: |-
+    AFF3CT turbo encoder: two LTE RSC encoders (8 states, {013, 015}), terminated trellises.
+
+    Mother code: N_cw = 3K + 12 bits. Any N >= K + 12 is reached by uniform puncturing of
+    the parity bits (N < N_cw) or by cyclic repetition (N > N_cw).
+
+    Input: K unpacked bits (one bit per byte). Output: N unpacked bits.
+
+    Interleaver: Auto = LTE if K is an LTE size, Random otherwise. The decoder must use the
+    same K, N, interleaver and seed.
+
+    Use it in a FEC Extended Encoder, FEC Tagged Encoder or FEC Async Encoder block.
+
+file_format: 1

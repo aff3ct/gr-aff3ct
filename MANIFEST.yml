@@ -1,0 +1,20 @@
+title: gr-aff3ct
+version: 1.0
+brief: AFF3CT forward error correction codes as gr-fec encoders and decoders
+tags:
+  - fec
+  - turbo
+  - aff3ct
+author:
+  - Mathieu Léonardon <mathieu.leonardon@imt-atlantique.fr>
+copyright_owner:
+  - aff3ct
+license: MIT (gr_modtool scaffolding GPL-3.0-or-later, see LICENSE)
+gr_supported_version:
+  - 3.10
+repo: https://github.com/aff3ct/gr-aff3ct
+website: # If you have a separate project website, put it here
+#icon: # Put a URL to a square image here that will be used as an icon
+description: |-
+  See README.md.
+file_format: 1
