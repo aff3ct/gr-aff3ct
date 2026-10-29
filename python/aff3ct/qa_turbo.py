@@ -85,6 +85,20 @@ class qa_turbo(gr_unittest.TestCase):
         self.assertEqual(fec.get_decoder_input_size(dec), 848 * dec.frames())
         self.assertEqual(fec.get_decoder_output_size(dec), 424 * dec.frames())
 
+    def test_005_intra(self):
+        # INTRA int16 only exists for 128-bit SIMD (SSE, NEON), and requires K % 8 == 0
+        try:
+            turbo_decoder.make(424, 848, simd="INTRA")
+        except RuntimeError as e:
+            if "Cannot allocate" in str(e):
+                self.skipTest("no INTRA int16 decoder for this SIMD instruction set")
+            raise
+        for K, N, itl in [(424, 848, "AUTO"), (336, 1500, "RANDOM")]:
+            be, fe, nf = run_chain(K, N, 64, interleaver=itl, simd="INTRA")
+            self.assertEqual(be, 0, f"INTRA K={K} N={N}: {be} bit errors")
+        be, fe, nf = run_chain(424, 1284, 2048, ebn0_db=1.5, simd="INTRA")
+        self.assertLess(fe / nf, 5e-2)
+
     def test_004_bad_N(self):
         with self.assertRaises(Exception):
             turbo_encoder.make(424, 424 + 11)

@@ -57,7 +57,8 @@ decoder = fec.extended_decoder([aff3ct.turbo_decoder.make(424, 848) for _ in ran
   repeated and the decoder adds the LLRs of the copies. This is not the LTE rate
   matching (no sub-block interleaver, no circular buffer).
 * Decoder: `n_ite` (default 6), `precision` (`int16`, default, or `float`), `simd`
-  (`INTER`, default and fastest; `INTRA`, not available in int16 with AVX-512; `SEQ`),
+  (`INTER`, default and fastest; `INTRA`, in int16 only with 128-bit SIMD, i.e. SSE or
+  NEON, and with K multiple of 8; `SEQ`),
   `llr_scale` (int16 only: LLRs are multiplied by it, then quantized on 6 bits with
   3 fractional bits, saturating at ±3.875, as in the AFF3CT simulator).
 * `aff3ct_args`: any extra AFF3CT command line option of the turbo codec, applied
@@ -69,17 +70,18 @@ Give a list of decoder objects to the FEC Extended Decoder (Parallelism 1, Dimen
 = number of decoders) and choose `capillary` (power of 2) or `ordinary` threading.
 Each object owns its AFF3CT modules: nothing is shared between threads.
 
-## Performance (AMD Ryzen 9 9950X3D, AVX-512)
+## Performance
 
-K = 424, N = 1284 (rate 1/3), 6 iterations, int16, INTER, measured through GNU Radio
-(vector source, FEC Extended Decoder, null sink):
+AMD Ryzen 9 9950X3D, K = 424, N = 1284 (rate 1/3), 6 iterations, int16, measured through
+GNU Radio (vector source, FEC Extended Decoder, null sink), information throughput:
 
-| Threading | Decoders | Throughput (info bits) |
-|---|---|---|
-| none | 1 | 56 Mb/s |
-| capillary | 2 | 131 Mb/s |
-| capillary | 4 | 265 Mb/s |
-| ordinary | 8 | 421 Mb/s |
+| SIMD build | Frames per call | 1 decoder | 2 decoders | 4 decoders |
+|---|---|---|---|---|
+| SSE4.2 (`-msse4.2`) | 8 | 40 Mb/s | 81 Mb/s | 160 Mb/s |
+| AVX2 (`-mavx2 -mfma`) | 16 | 71 Mb/s | 145 Mb/s | 271 Mb/s |
+| AVX-512 (`-march=native`) | 32 | 70 Mb/s | 132 Mb/s | 262 Mb/s |
+
+(multiple decoders: `capillary` threading.) INTRA, SSE4.2, 1 decoder: 15 Mb/s.
 
 Error correction is identical to the AFF3CT simulator (`aff3ct -C TURBO -K 424
 --enc-sub-std LTE --dec-sub-simd INTER -p 16 -i 6`), e.g. FER 6e-1 at Eb/N0 = 0.5 dB,
@@ -107,10 +109,16 @@ cmake --build build -j$(nproc)
 cmake --install build
 ```
 
-`-march=native` selects the best SIMD instruction set of the machine (AVX2 / AVX-512 on
-x86, NEON on ARM). **gr-aff3ct must be compiled with the same flags** (it is by
-default, option `GR_AFF3CT_NATIVE`): the frame layouts of the SIMD decoders depend on
-the register width. Do not copy binaries between machines with different CPUs.
+`-march=native` selects the best SIMD instruction set of the machine (SSE4.2, AVX2 or
+AVX-512 on x86, NEON on ARM). To target a given instruction set instead, e.g. to run the
+same binaries on several machines, replace it with `-msse4.2` or `-mavx2 -mfma`.
+
+**gr-aff3ct must be compiled with the same SIMD flags as AFF3CT**: the register width
+fixes the number of frames decoded together and the buffer alignment. gr-aff3ct uses
+`-march=native` by default; otherwise pass `-DGR_AFF3CT_NATIVE=OFF
+-DCMAKE_CXX_FLAGS="-mavx2 -mfma"` (same flags as AFF3CT). A mismatch is detected when
+a decoder is created ("AFF3CT and gr-aff3ct were built with different SIMD instruction
+sets"). The three x86 variants (SSE4.2, AVX2, AVX-512) pass the QA tests.
 
 ### 2. gr-aff3ct
 

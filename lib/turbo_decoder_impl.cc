@@ -6,6 +6,7 @@
  */
 
 #include "turbo_decoder_impl.h"
+#include <sstream>
 #include <stdexcept>
 #include <type_traits>
 
@@ -28,6 +29,18 @@ public:
     engine(const turbo_params& p, int frames, std::string& itl) : d_codec(build_turbo_codec<B, Q>(p, itl))
     {
         auto& dec = d_codec->get_decoder_siho();
+        // the INTER decoder of libaff3ct processes one frame per SIMD lane: a different
+        // count means that libaff3ct and gr-aff3ct were built with different SIMD flags
+        // (buffer alignment and register width would not match)
+        if (p.simd == "INTER" && dec.get_n_frames_per_wave() != (size_t)mipp::N<Q>()) {
+            std::stringstream msg;
+            msg << "gr-aff3ct: AFF3CT and gr-aff3ct were built with different SIMD instruction "
+                   "sets (gr-aff3ct: "
+                << mipp::InstructionFullType << ", " << mipp::N<Q>()
+                << " lanes; libaff3ct: " << dec.get_n_frames_per_wave()
+                << " lanes). Rebuild both with the same flags (e.g. -march=native).";
+            throw std::runtime_error(msg.str());
+        }
         d_frames = frames > 0 ? frames : (int)dec.get_n_frames_per_wave();
         d_codec->set_n_frames(d_frames);
         // set_n_frames() regenerates the interleaver without reseeding it: a RANDOM
