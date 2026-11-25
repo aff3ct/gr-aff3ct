@@ -192,6 +192,8 @@ std::string codec_help(const std::string& code)
 
 codec_args::codec_args(const std::string& args) : precision("float")
 {
+    c_locale c; // "0.75" is 0.75 whatever the locale of the process
+
     // AFF3CT reads some data files (e.g. the 5G polar sequence) from the directories of
     // AFF3CT_CLI_PATH, by default from the directory of the executable (python here)
     if (std::string(GR_AFF3CT_DATA_DIR).size() > 0)

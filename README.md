@@ -17,7 +17,8 @@ gr-aff3ct needs GNU Radio 3.10 and AFF3CT 4.7.4 or later.
 
 ```bash
 sudo add-apt-repository ppa:aff3ct/aff3ct
-sudo apt install libaff3ct-dev aff3ct-bin gnuradio-dev pybind11-dev python3-pybind11 cmake g++ git
+sudo apt install libaff3ct-dev aff3ct-bin gnuradio-dev pybind11-dev python3-pybind11 \
+                 libsndfile1-dev libgsl-dev cmake g++ git
 
 git clone https://github.com/aff3ct/gr-aff3ct.git && cd gr-aff3ct
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -27,7 +28,8 @@ sudo cmake --install build && sudo ldconfig
 
 **Other systems (other Linux distributions, ARM, Raspberry Pi)**: build AFF3CT from its
 sources first, then gr-aff3ct. GNU Radio 3.10 with its development files, pybind11, CMake
-and a C++17 compiler come from the system.
+and a C++17 compiler come from the system (on Debian and its derivatives: the packages of
+the line above, without the first two).
 
 ```bash
 git clone --recursive https://github.com/aff3ct/aff3ct.git && cd aff3ct

@@ -9,6 +9,7 @@
 #define INCLUDED_AFF3CT_CODEC_ARGS_H
 
 #include <aff3ct.hpp>
+#include <locale.h>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -58,6 +59,30 @@ public:
 };
 
 /*!
+ * AFF3CT reads the numbers of its command line with the C library, which follows the
+ * locale of the process: in a GUI application (GNU Radio Companion, a Qt flowgraph) on a
+ * system whose decimal separator is a comma, "0.75" would be read as 0. This selects the
+ * "C" locale for the calling thread, for the lifetime of the object.
+ */
+class c_locale
+{
+public:
+    c_locale() : d_c(newlocale(LC_ALL_MASK, "C", (locale_t)0)), d_old(d_c ? uselocale(d_c) : (locale_t)0) {}
+    ~c_locale()
+    {
+        if (d_c) {
+            uselocale(d_old);
+            freelocale(d_c);
+        }
+    }
+    c_locale(const c_locale&) = delete;
+    c_locale& operator=(const c_locale&) = delete;
+
+private:
+    locale_t d_c, d_old;
+};
+
+/*!
  * Calls \p f and rethrows the AFF3CT exceptions without their stack trace, as the parser of
  * the simulator does: the errors of a wrong command line read better in Python. (The
  * message is built by what(), so it is read here, while the stack trace is disabled.)
@@ -73,6 +98,7 @@ auto without_stacktrace(F f) -> decltype(f())
 {
     // the flag is global: one object is built at a time
     std::lock_guard<std::mutex> lock(stacktrace_mutex());
+    c_locale c;
     const bool save = spu::tools::exception::no_stacktrace;
     spu::tools::exception::no_stacktrace = true;
     try {

@@ -40,7 +40,13 @@ public:
     codec_decoder_impl(const std::string& aff3ct_args, float llr_scale);
     ~codec_decoder_impl() override = default;
 
-    void generic_work(const void* in_buffer, void* out_buffer) override;
+    // The input of generic_work() became const in GNU Radio 3.10.11: both signatures are
+    // declared (without "override"), the one of the installed gr-fec is the virtual one.
+    void generic_work(const void* in_buffer, void* out_buffer);
+    void generic_work(void* in_buffer, void* out_buffer)
+    {
+        generic_work(static_cast<const void*>(in_buffer), out_buffer);
+    }
     double rate() override { return (double)info_bits() / coded_bits(); }
     int get_input_size() override { return d_frames * coded_bits(); }
     int get_output_size() override { return d_frames * info_bits(); }

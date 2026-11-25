@@ -35,6 +35,9 @@ endif()
 list(INSERT CMAKE_MODULE_PATH 0 ${PROJECT_SOURCE_DIR}/cmake/Modules)
 # Find gnuradio to get access to the cmake modules
 find_package(Gnuradio "3.10" REQUIRED COMPONENTS blocks fec)
+# The CMake package of gr-fec in GNU Radio 3.10.1 (Ubuntu 22.04) links to GSL::gsl without
+# looking for it
+find_package(GSL QUIET)
 
 # AFF3CT must be built as a shared library (-DAFF3CT_COMPILE_SHARED_LIB=ON) and installed;
 # point CMAKE_PREFIX_PATH to its install prefix if it is not in a standard location.
@@ -73,13 +76,17 @@ endif()
 # simulator in <prefix>/share/aff3ct-<version>. AFF3CT finds them through AFF3CT_CLI_PATH.
 set(_aff3ct_data_dir "")
 if(_aff3ct_lib)
+    # the directory carries the full version of AFF3CT (4.7.4, or 4.7.3-5-gf6aabe7 between
+    # two releases), which is also the name of the directory of its CMake package
+    get_filename_component(_aff3ct_pkg "${aff3ct_DIR}" NAME)
     set(_dir "${_aff3ct_libdir}")
     foreach(_up RANGE 3)
         get_filename_component(_dir "${_dir}" DIRECTORY)
-        if(EXISTS "${_dir}/share/aff3ct-${aff3ct_VERSION}/conf")
-            set(_aff3ct_data_dir "${_dir}/share/aff3ct-${aff3ct_VERSION}")
-            break()
-        endif()
+        foreach(_name IN ITEMS "${_aff3ct_pkg}" "aff3ct-${aff3ct_VERSION}")
+            if(NOT _aff3ct_data_dir AND EXISTS "${_dir}/share/${_name}/conf")
+                set(_aff3ct_data_dir "${_dir}/share/${_name}")
+            endif()
+        endforeach()
     endforeach()
 endif()
 set(GR_AFF3CT_DATA_DIR
@@ -87,6 +94,12 @@ set(GR_AFF3CT_DATA_DIR
     CACHE PATH "AFF3CT data files (default AFF3CT_CLI_PATH of gr-aff3ct)")
 if(GR_AFF3CT_DATA_DIR)
     message(STATUS "AFF3CT data files: ${GR_AFF3CT_DATA_DIR}")
+else()
+    message(
+        WARNING
+            "AFF3CT data files (share/aff3ct-<version>/conf) not found: the codes that read them "
+            "(5G LDPC, 5G polar...) will fail. They are installed with the AFF3CT simulator "
+            "(package aff3ct-bin); give their directory with -DGR_AFF3CT_DATA_DIR=<dir>.")
 endif()
 
 set(GR_AFF3CT_HWCAPS

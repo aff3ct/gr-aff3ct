@@ -195,6 +195,29 @@ class qa_codec(gr_unittest.TestCase):
             self.assertEqual(len(out), len(bits), args)
             self.assertEqual(int((out != bits).sum()), 0, args)
 
+    def test_008_locale(self):
+        # a GUI (GRC, Qt) sets the locale of the process: with a decimal comma, the C
+        # library would read "0.7" as 0
+        import locale
+        args = "-C POLAR -K 512 -N 1024 --enc-fb-noise 0.7"
+        saved = locale.setlocale(locale.LC_ALL)
+        try:
+            for name in ("fr_FR.UTF-8", "de_DE.UTF-8", "fr_FR.utf8", "de_DE.utf8"):
+                try:
+                    locale.setlocale(locale.LC_ALL, name)
+                    break
+                except locale.Error:
+                    continue
+            else:
+                print("skipped: no locale with a decimal comma installed")
+                return
+            self.assertEqual(locale.localeconv()["decimal_point"], ",")
+            be, fe, nf = run_chain(args, 16)
+            self.assertEqual(be, 0)
+            self.assertEqual(locale.localeconv()["decimal_point"], ",")  # locale left as it was
+        finally:
+            locale.setlocale(locale.LC_ALL, saved)
+
     def test_006_help(self):
         h = codec_help("POLAR")
         self.assertIn("Usage: -C POLAR", h)
