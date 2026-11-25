@@ -42,12 +42,71 @@ find_package(Threads REQUIRED)
 find_package(cpptrace CONFIG QUIET)
 find_package(aff3ct 4.6 CONFIG REQUIRED)
 
-# MIPP (the SIMD layer of AFF3CT) is header-only: the SIMD instruction set selected here must
-# be the same as the one used to build AFF3CT, otherwise the frame layouts do not match.
-option(GR_AFF3CT_NATIVE "Compile with -march=native (as AFF3CT should be)" ON)
-if(GR_AFF3CT_NATIVE)
-    add_compile_options(-march=native)
+# MIPP (the SIMD layer of AFF3CT) is header-only: gr-aff3ct must be compiled for the same SIMD
+# instruction set as the libaff3ct it is loaded with, otherwise the frame layouts do not match.
+#
+# A libaff3ct built with glibc-hwcaps variants (AFF3CT_HWCAPS, e.g. the PPA packages) has a base
+# library plus one library per x86-64 level in <libdir>/glibc-hwcaps/<level>/, and the dynamic
+# loader picks the best one for the CPU. gr-aff3ct then builds the same levels, so that the loader
+# makes the same choice for both libraries.
+get_target_property(_aff3ct_configs aff3ct::aff3ct-shared-lib IMPORTED_CONFIGURATIONS)
+foreach(_config IN LISTS _aff3ct_configs ITEMS NOCONFIG)
+    get_target_property(_aff3ct_lib aff3ct::aff3ct-shared-lib IMPORTED_LOCATION_${_config})
+    if(_aff3ct_lib)
+        break()
+    endif()
+endforeach()
+set(_aff3ct_hwcaps "")
+if(_aff3ct_lib)
+    get_filename_component(_aff3ct_libdir "${_aff3ct_lib}" DIRECTORY)
+    get_filename_component(_aff3ct_libname "${_aff3ct_lib}" NAME)
+    file(GLOB _aff3ct_variants "${_aff3ct_libdir}/glibc-hwcaps/*/${_aff3ct_libname}")
+    foreach(_variant IN LISTS _aff3ct_variants)
+        get_filename_component(_level "${_variant}" DIRECTORY)
+        get_filename_component(_level "${_level}" NAME)
+        list(APPEND _aff3ct_hwcaps ${_level})
+    endforeach()
+    list(SORT _aff3ct_hwcaps)
 endif()
+
+# Data files of AFF3CT (conf/: 5G polar sequence, LDPC matrices...), installed with the
+# simulator in <prefix>/share/aff3ct-<version>. AFF3CT finds them through AFF3CT_CLI_PATH.
+set(_aff3ct_data_dir "")
+if(_aff3ct_lib)
+    set(_dir "${_aff3ct_libdir}")
+    foreach(_up RANGE 3)
+        get_filename_component(_dir "${_dir}" DIRECTORY)
+        if(EXISTS "${_dir}/share/aff3ct-${aff3ct_VERSION}/conf")
+            set(_aff3ct_data_dir "${_dir}/share/aff3ct-${aff3ct_VERSION}")
+            break()
+        endif()
+    endforeach()
+endif()
+set(GR_AFF3CT_DATA_DIR
+    "${_aff3ct_data_dir}"
+    CACHE PATH "AFF3CT data files (default AFF3CT_CLI_PATH of gr-aff3ct)")
+if(GR_AFF3CT_DATA_DIR)
+    message(STATUS "AFF3CT data files: ${GR_AFF3CT_DATA_DIR}")
+endif()
+
+set(GR_AFF3CT_HWCAPS
+    "${_aff3ct_hwcaps}"
+    CACHE STRING "glibc-hwcaps levels of libgnuradio-aff3ct (default: the levels of libaff3ct)")
+if(_aff3ct_hwcaps)
+    # x86-64 base of the AFF3CT packages
+    set(_simd_flags_default "-msse4.2")
+    message(STATUS "libaff3ct has glibc-hwcaps variants: ${_aff3ct_hwcaps}")
+else()
+    set(_simd_flags_default "-march=native")
+endif()
+set(GR_AFF3CT_SIMD_FLAGS
+    "${_simd_flags_default}"
+    CACHE STRING "SIMD flags of the base build, the same as the base libaff3ct")
+if(GR_AFF3CT_HWCAPS AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "GR_AFF3CT_HWCAPS requires Linux (glibc 2.33 or later).")
+endif()
+separate_arguments(_simd_flags UNIX_COMMAND "${GR_AFF3CT_SIMD_FLAGS}")
+add_compile_options(${_simd_flags})
 
 # Set the version information here
 # cmake-format: off
@@ -146,7 +205,6 @@ add_custom_target(uninstall ${CMAKE_COMMAND} -P
 ########################################################################
 add_subdirectory(include/gnuradio/aff3ct)
 add_subdirectory(lib)
-add_subdirectory(apps)
 add_subdirectory(examples)
 add_subdirectory(docs)
 # NOTE: manually update below to use GRC to generate C++ flowgraphs w/o python

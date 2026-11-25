@@ -6,5 +6,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-install(FILES aff3ct_turbo_encoder_def.block.yml aff3ct_turbo_decoder_def.block.yml
+install(FILES aff3ct_codec_encoder_def.block.yml aff3ct_codec_decoder_def.block.yml
         DESTINATION share/gnuradio/grc/blocks)

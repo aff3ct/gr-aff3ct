@@ -1,10 +1,10 @@
 options:
   parameters: {author: gr-aff3ct, catch_exceptions: 'True', category: Custom, cmake_opt: '',
     comment: '', copyright: '', description: '', gen_cmake: 'On', gen_linking: dynamic,
-    generate_options: qt_gui, hier_block_src_path: '.:', id: aff3ct_turbo_ber, max_nouts: '0',
+    generate_options: qt_gui, hier_block_src_path: '.:', id: aff3ct_codec_ber, max_nouts: '0',
     output_language: python, placement: '(0,0)', qt_qss_theme: '', realtime_scheduling: '',
     run: 'True', run_command: '{python} -u {filename}', run_options: prompt, sizing_mode: fixed,
-    thread_safe_setters: '', title: 'AFF3CT turbo code: BER on AWGN', window_size: '2000,2000'}
+    thread_safe_setters: '', title: 'AFF3CT code (any): BER on AWGN', window_size: '2000,2000'}
   states:
     bus_sink: false
     bus_source: false
@@ -200,7 +200,7 @@ blocks:
     state: enabled
 - name: K
   id: variable
-  parameters: {comment: '', value: '424'}
+  parameters: {comment: 'information bits', value: enc.info_bits()}
   states:
     bus_sink: false
     bus_source: false
@@ -210,7 +210,7 @@ blocks:
     state: enabled
 - name: N
   id: variable
-  parameters: {comment: '', value: '1284'}
+  parameters: {comment: '', value: enc.coded_bits()}
   states:
     bus_sink: false
     bus_source: false
@@ -231,7 +231,7 @@ blocks:
 - name: ebn0
   id: variable_qtgui_range
   parameters: {comment: '', gui_hint: '', label: Eb/N0 (dB), min_len: '200', orient: QtCore.Qt.Horizontal,
-    rangeType: float, start: '0', step: '0.1', stop: '4', value: '1.5', widget: counter_slider}
+    rangeType: float, start: '0', step: '0.1', stop: '6', value: '2.0', widget: counter_slider}
   states:
     bus_sink: false
     bus_source: false
@@ -240,9 +240,9 @@ blocks:
     rotation: 0
     state: enabled
 - name: enc
-  id: aff3ct_turbo_encoder_def
-  parameters: {comment: '', ndim: '0', dim1: '1', dim2: '1', K: K, N: N, interleaver: AUTO,
-    seed: '0', aff3ct_args: ''''''}
+  id: aff3ct_codec_encoder_def
+  parameters: {comment: 'same command line in the encoder and the decoder', ndim: '0',
+    dim1: '1', dim2: '1', aff3ct_args: '-C LDPC --enc-type LDPC_5G -K 512 -N 1024 --dec-type BP_HORIZONTAL_LAYERED --dec-implem NMS --dec-norm 0.75 --dec-simd INTER -p 16'}
   states:
     bus_sink: false
     bus_source: false
@@ -251,10 +251,9 @@ blocks:
     rotation: 0
     state: enabled
 - name: dec
-  id: aff3ct_turbo_decoder_def
-  parameters: {comment: '', ndim: '1', dim1: '2', dim2: '1', K: K, N: N, n_ite: '6',
-    interleaver: AUTO, seed: '0', precision: int16, simd: INTER, frames: '0', llr_scale: '1.0',
-    aff3ct_args: ''''''}
+  id: aff3ct_codec_decoder_def
+  parameters: {comment: '', ndim: '1', dim1: '2', dim2: '1', aff3ct_args: '-C LDPC --enc-type LDPC_5G -K 512 -N 1024 --dec-type BP_HORIZONTAL_LAYERED --dec-implem NMS --dec-norm 0.75 --dec-simd INTER -p 16',
+    llr_scale: '1.0'}
   states:
     bus_sink: false
     bus_source: false

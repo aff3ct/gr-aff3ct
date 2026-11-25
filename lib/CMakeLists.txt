@@ -11,8 +11,14 @@
 ########################################################################
 include(GNUInstallDirs)
 
-list(APPEND aff3ct_sources rate_matcher.cc turbo_codec.cc turbo_encoder_impl.cc
-     turbo_decoder_impl.cc)
+list(
+    APPEND
+    aff3ct_sources
+    codec_args.cc
+    codec_decoder_impl.cc
+    codec_encoder_impl.cc
+    simd_check.cc)
+
 
 set(aff3ct_sources
     "${aff3ct_sources}"
@@ -30,6 +36,7 @@ target_include_directories(
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
     PUBLIC $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 set_target_properties(gnuradio-aff3ct PROPERTIES DEFINE_SYMBOL "gnuradio_aff3ct_EXPORTS")
+target_compile_definitions(gnuradio-aff3ct PRIVATE GR_AFF3CT_DATA_DIR="${GR_AFF3CT_DATA_DIR}")
 
 if(APPLE)
     set_target_properties(gnuradio-aff3ct PROPERTIES INSTALL_NAME_DIR
@@ -41,6 +48,34 @@ endif(APPLE)
 ########################################################################
 include(GrMiscUtils)
 gr_library_foo(gnuradio-aff3ct)
+
+########################################################################
+# glibc-hwcaps variants: the same library compiled for each x86-64 level,
+# picked by the dynamic loader like the libaff3ct variants
+########################################################################
+foreach(level IN LISTS GR_AFF3CT_HWCAPS)
+    add_library(gnuradio-aff3ct-${level} SHARED ${aff3ct_sources})
+    target_link_libraries(gnuradio-aff3ct-${level} gnuradio::gnuradio-runtime
+                          gnuradio::gnuradio-fec aff3ct::aff3ct-shared-lib)
+    target_include_directories(gnuradio-aff3ct-${level}
+                               PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+    target_compile_options(gnuradio-aff3ct-${level} PRIVATE -march=${level})
+    target_compile_definitions(gnuradio-aff3ct-${level}
+                               PRIVATE GR_AFF3CT_DATA_DIR="${GR_AFF3CT_DATA_DIR}")
+    set_target_properties(
+        gnuradio-aff3ct-${level}
+        PROPERTIES DEFINE_SYMBOL "gnuradio_aff3ct_EXPORTS"
+                   OUTPUT_NAME gnuradio-aff3ct
+                   SOVERSION ${LIBVER}
+                   VERSION ${VERSION}
+                   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/glibc-hwcaps/${level})
+    # only the versioned file is looked up by the loader
+    install(
+        TARGETS gnuradio-aff3ct-${level}
+        LIBRARY DESTINATION ${GR_LIBRARY_DIR}/glibc-hwcaps/${level} NAMELINK_SKIP)
+    # the library tests and the Python QA tests load the variants from the build tree
+    add_dependencies(gnuradio-aff3ct gnuradio-aff3ct-${level})
+endforeach()
 
 ########################################################################
 # Print summary

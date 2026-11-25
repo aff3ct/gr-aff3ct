@@ -9,4 +9,5 @@
 ########################################################################
 # Install public header files
 ########################################################################
-install(FILES api.h turbo_encoder.h turbo_decoder.h DESTINATION include/gnuradio/aff3ct)
+install(FILES api.h codec_decoder.h codec_encoder.h codec_help.h
+        DESTINATION include/gnuradio/aff3ct)

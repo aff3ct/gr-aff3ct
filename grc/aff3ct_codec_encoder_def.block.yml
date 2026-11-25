@@ -1,0 +1,58 @@
+id: aff3ct_codec_encoder_def
+label: AFF3CT Codec Encoder Definition
+category: '[AFF3CT]'
+flags: [ show_id ]
+
+parameters:
+-   id: ndim
+    label: Parallelism
+    dtype: enum
+    default: '0'
+    options: ['0', '1', '2']
+-   id: dim1
+    label: Dimension 1
+    dtype: int
+    default: '1'
+    hide: ${ ('none' if (int(ndim) >= 1) else 'all') }
+-   id: dim2
+    label: Dimension 2
+    dtype: int
+    default: '4'
+    hide: ${ ('none' if (int(ndim) >= 2) else 'all') }
+-   id: aff3ct_args
+    label: AFF3CT codec
+    dtype: string
+    default: '-C LDPC --enc-type LDPC_5G -K 512 -N 1024 --dec-type BP_HORIZONTAL_LAYERED --dec-implem NMS --dec-norm 0.75 --dec-simd INTER -p 16'
+value: ${ aff3ct.codec_encoder.make(aff3ct_args) }
+
+templates:
+    imports: from gnuradio import aff3ct
+    var_make: |-
+        % if int(ndim)==0:
+        self.${id} = ${id} = aff3ct.codec_encoder.make(${aff3ct_args})
+        % elif int(ndim)==1:
+        self.${id} = ${id} = list(map((lambda a: aff3ct.codec_encoder.make(${aff3ct_args})), range(0, ${dim1})))
+        % else:
+        self.${id} = ${id} = list(map((lambda b: list(map((lambda a: aff3ct.codec_encoder.make(${aff3ct_args})), range(0, ${dim2})))), range(0, ${dim1})))
+        % endif
+
+documentation: |-
+    Encoder of any AFF3CT code, described by the options of the AFF3CT simulator:
+    -C (POLAR, POLAR_MK, POLAR_PAC, POLAR_PT, TURBO, TURBO_DB, TPC, LDPC, REP, RA, RSC,
+    RSC_DB, CONV, BCH, RS, UNCODED), -K, -N and the --enc-*, --dec-*, --pct-*, --itl-*,
+    --crc-* options. Examples:
+
+      -C LDPC --enc-type LDPC_5G -K 512 -N 1024 --dec-type BP_HORIZONTAL_LAYERED --dec-implem NMS --dec-norm 0.75 --dec-simd INTER -p 16
+      -C POLAR -K 528 -N 1024 --enc-fb-gen-method 5G --crc-poly 16-5G --dec-type SCL -L 8
+      -C TURBO -K 424 --enc-sub-std LTE -i 6
+      -C BCH -N 255 -K 239 -T 2
+
+    The decoder must be given the same command line (the decoding options, -p and -F are ignored here).
+    With a CRC, K counts the CRC bits, as in AFF3CT: a frame carries K - CRC size bits.
+
+    Input: information bits, unpacked (one bit per byte). Output: N unpacked bits.
+
+    Use it in a FEC Extended Encoder, FEC Tagged Encoder or FEC Async Encoder block
+    (packets of one or several whole frames).
+
+file_format: 1

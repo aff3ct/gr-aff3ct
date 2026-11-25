@@ -1,0 +1,64 @@
+id: aff3ct_codec_decoder_def
+label: AFF3CT Codec Decoder Definition
+category: '[AFF3CT]'
+flags: [ show_id ]
+
+parameters:
+-   id: ndim
+    label: Parallelism
+    dtype: enum
+    default: '0'
+    options: ['0', '1', '2']
+-   id: dim1
+    label: Dimension 1
+    dtype: int
+    default: '1'
+    hide: ${ ('none' if (int(ndim) >= 1) else 'all') }
+-   id: dim2
+    label: Dimension 2
+    dtype: int
+    default: '4'
+    hide: ${ ('none' if (int(ndim) >= 2) else 'all') }
+-   id: aff3ct_args
+    label: AFF3CT codec
+    dtype: string
+    default: '-C LDPC --enc-type LDPC_5G -K 512 -N 1024 --dec-type BP_HORIZONTAL_LAYERED --dec-implem NMS --dec-norm 0.75 --dec-simd INTER -p 16'
+-   id: llr_scale
+    label: LLR scale
+    dtype: float
+    default: '1.0'
+    hide: part
+value: ${ aff3ct.codec_decoder.make(aff3ct_args, llr_scale) }
+
+templates:
+    imports: from gnuradio import aff3ct
+    var_make: |-
+        % if int(ndim)==0:
+        self.${id} = ${id} = aff3ct.codec_decoder.make(${aff3ct_args}, ${llr_scale})
+        % elif int(ndim)==1:
+        self.${id} = ${id} = list(map((lambda a: aff3ct.codec_decoder.make(${aff3ct_args}, ${llr_scale})), range(0, ${dim1})))
+        % else:
+        self.${id} = ${id} = list(map((lambda b: list(map((lambda a: aff3ct.codec_decoder.make(${aff3ct_args}, ${llr_scale})), range(0, ${dim2})))), range(0, ${dim1})))
+        % endif
+
+documentation: |-
+    Decoder of any AFF3CT code, matching the AFF3CT Codec Encoder Definition: give both the
+    same command line (options of the AFF3CT simulator, see the encoder).
+
+    Input: float LLRs, AFF3CT convention: LLR = log(P(b=0)/P(b=1)), positive means bit 0.
+    For BPSK (0 -> +1) on AWGN: LLR = 2y/sigma^2. Output: information bits, unpacked.
+
+    Two options of the simulator are read in the command line, as in AFF3CT:
+      -p 16 (or -p 8): fixed point decoder, faster when the decoder supports it. Default:
+            float (-p 32).
+      -F n: frames decoded per call. Default: at least 16. With the FEC Tagged or Async
+            Decoder, a packet holds 1 to n codewords: set -F to the number of codewords of
+            the packets.
+
+    Multithreading: set Parallelism to 1 and Dimension 1 to the number of decoders, then
+    choose the threading type in the FEC Extended Decoder (capillary: power of 2).
+
+    Polar codes: the frozen bits are fixed when the decoder is built, from --enc-fb-noise
+    (design sigma) or by a construction without noise (--enc-fb-gen-method 5G).
+
+file_format: 1

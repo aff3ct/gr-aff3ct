@@ -1,159 +1,113 @@
 # gr-aff3ct
 
-GNU Radio 3.10 out-of-tree module exposing [AFF3CT](https://github.com/aff3ct/aff3ct)
-forward error correction codes as gr-fec encoder and decoder objects.
+The forward error correction codes of [AFF3CT](https://github.com/aff3ct/aff3ct) in
+GNU Radio 3.10: LDPC, polar, turbo, BCH, Reed-Solomon, convolutional and more, with the
+fast SIMD decoders of AFF3CT.
 
-First code available: **turbo code with LTE constituent encoders** (two 8-state RSC
-encoders {013, 015}, terminated trellises), **any K and any N**, decoded by the AFF3CT
-SIMD BCJR decoders (max-log, int16 or float).
+A code is described by the command line of the AFF3CT simulator: a line that works in
+the simulator works here. `codec_encoder` and
+`codec_decoder` are gr-fec encoder and decoder objects, used in the standard FEC Extended,
+Tagged and Async blocks of GNU Radio.
 
-## How it plugs into a flowgraph
+## Install
 
-The objects follow the gr-fec API (`generic_encoder` / `generic_decoder`), so they are
-used through the standard gr-fec deployment blocks, exactly like the CC or polar codes
-of GNU Radio:
+gr-aff3ct needs GNU Radio 3.10 and AFF3CT 4.7.4 or later.
 
-| Your chain | Encoder block | Decoder block |
-|---|---|---|
-| continuous stream, frames already aligned | FEC Extended Encoder | FEC Extended Decoder |
-| tagged streams (`packet_len`) | FEC Tagged Encoder | FEC Tagged Decoder |
-| PDUs | FEC Async Encoder | FEC Async Decoder |
+**Ubuntu 22.04 and later, x86-64**: AFF3CT comes from its PPA.
 
-In GRC: add an *AFF3CT Turbo Encoder Definition* and an *AFF3CT Turbo Decoder
-Definition* variable (category AFF3CT), and give their ids to the deployment blocks.
-`examples/aff3ct_turbo_ber.grc` is a complete BER test on AWGN.
+```bash
+sudo add-apt-repository ppa:aff3ct/aff3ct
+sudo apt install libaff3ct-dev aff3ct-bin gnuradio-dev pybind11-dev python3-pybind11 cmake g++ git
+
+git clone https://github.com/aff3ct/gr-aff3ct.git && cd gr-aff3ct
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+sudo cmake --install build && sudo ldconfig
+```
+
+**Other systems (other Linux distributions, ARM, Raspberry Pi)**: build AFF3CT from its
+sources first, then gr-aff3ct. GNU Radio 3.10 with its development files, pybind11, CMake
+and a C++17 compiler come from the system.
+
+```bash
+git clone --recursive https://github.com/aff3ct/aff3ct.git && cd aff3ct
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DAFF3CT_COMPILE_SHARED_LIB=ON \
+      -DCMAKE_CXX_FLAGS="-march=native -faligned-new" -DCMAKE_INSTALL_PREFIX=$HOME/.local/aff3ct
+cmake --build build -j$(nproc) && cmake --install build && cd ..
+
+git clone https://github.com/aff3ct/gr-aff3ct.git && cd gr-aff3ct
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=$HOME/.local/aff3ct
+cmake --build build -j$(nproc)
+sudo cmake --install build && sudo ldconfig
+```
+
+`cd build && ctest` runs the tests. Install without sudo, binaries for several x86
+machines: see [docs/details.md](docs/details.md).
+
+## Use
 
 In Python:
 
 ```python
 from gnuradio import aff3ct, fec
-enc = aff3ct.turbo_encoder.make(K=424, N=848)                  # rate 1/2
-dec = aff3ct.turbo_decoder.make(K=424, N=848, n_ite=6)
-encoder = fec.extended_encoder(enc, threading=None, puncpat="11")
-decoder = fec.extended_decoder([aff3ct.turbo_decoder.make(424, 848) for _ in range(4)],
-                               threading="capillary", puncpat="11")
+
+code = ("-C LDPC --enc-type LDPC_5G -K 512 -N 1024 "
+        "--dec-type BP_HORIZONTAL_LAYERED --dec-implem NMS --dec-norm 0.75 --dec-simd INTER -p 16")
+
+encoder = fec.extended_encoder(aff3ct.codec_encoder.make(code), threading=None, puncpat="11")
+decoder = fec.extended_decoder(aff3ct.codec_decoder.make(code), threading=None, puncpat="11")
 ```
 
-### Formats
+`code` is a command line of the AFF3CT simulator, here a 5G LDPC code of 512 information
+bits in 1024, decoded by 10 iterations of layered normalized min-sum, in 16-bit fixed
+point. Each option is described in the AFF3CT documentation:
+[LDPC codec](https://aff3ct.readthedocs.io/en/latest/user/simulation/parameters/codec/ldpc/codec.html),
+[all codes](https://aff3ct.readthedocs.io/en/latest/user/simulation/parameters/codec/codec.html).
+The same line given to the `aff3ct` simulator, with a range of SNR (`-m 1 -M 3`), prints
+the error rate curve of the code.
 
-* Encoder: input K unpacked bits (one bit per byte, 0 or 1), output N unpacked bits.
-* Decoder: input float LLRs, output unpacked bits.
-  **AFF3CT convention: LLR = log(P(b=0) / P(b=1)), positive means bit 0.** For BPSK
-  mapping 0 -> +1 on AWGN, LLR = 2y/sigma². With the opposite mapping, negate the LLRs.
-* The decoder works on **several frames per call** (`frames`, 0 = SIMD width:
-  32 in int16 with AVX-512, 16 with AVX2, 8 with SSE or NEON): its input item is
-  `frames * N` LLRs and its output `frames * K` bits. With the Extended blocks this is
-  transparent. With the Tagged / Async blocks, a packet must hold `frames` codewords,
-  or use `frames=1` (slower, see below).
+The encoder takes unpacked bits (one bit per byte) and the decoder float LLRs, **positive
+for a bit 0**. Give the same command line to both.
 
-### Code parameters
+In GNU Radio Companion: add an *AFF3CT Codec Encoder Definition* and an *AFF3CT Codec
+Decoder Definition* (category AFF3CT) and give their ids to the FEC blocks.
+`examples/aff3ct_codec_ber.grc` is a complete BER test on an AWGN channel.
 
-* **K**: any value. Interleaver `AUTO` uses the LTE interleaver when K is an LTE size
-  (40 to 6144), a random interleaver with a fixed seed otherwise. Encoder and decoder
-  must use the same K, N, interleaver and seed.
-* **N**: any value with N >= K + 12. The mother code has N_cw = 3K + 12 bits. For
-  N < N_cw the parity bits are uniformly punctured (alternately in both encoders;
-  systematic and tail bits are always sent). For N > N_cw the codeword is cyclically
-  repeated and the decoder adds the LLRs of the copies. This is not the LTE rate
-  matching (no sub-block interleaver, no circular buffer).
-* Decoder: `n_ite` (default 6), `precision` (`int16`, default, or `float`), `simd`
-  (`INTER`, default and fastest; `INTRA`, in int16 only with 128-bit SIMD, i.e. SSE or
-  NEON, and with K multiple of 8; `SEQ`),
-  `llr_scale` (int16 only: LLRs are multiplied by it, then quantized on 6 bits with
-  3 fractional bits, saturating at ±3.875, as in the AFF3CT simulator).
-* `aff3ct_args`: any extra AFF3CT command line option of the turbo codec, applied
-  last, e.g. `--dec-sf-type LTE_VEC` (extrinsic scaling) or `--dec-sub-max MAXS`.
+## Codes
 
-### Multithreading
+| Code | Example |
+|---|---|
+| LDPC 5G (base graphs: data files) | `-C LDPC --enc-type LDPC_5G -K 512 -N 1024 --dec-type BP_HORIZONTAL_LAYERED --dec-implem NMS --dec-norm 0.75 --dec-simd INTER -p 16` |
+| LDPC DVB-S2 | `-C LDPC --enc-type LDPC_DVBS2 -K 7200 -N 16200` |
+| LDPC from a parity check matrix | `-C LDPC -K 504 -N 1008 --enc-type LDPC_H --dec-h-path conf/dec/LDPC/MACKAY_504_1008.alist` |
+| Polar, 5G construction, CRC, SCL | `-C POLAR -K 528 -N 1024 --enc-fb-gen-method 5G --crc-poly 16-5G --dec-type SCL -L 8` |
+| Polar, GA construction, shortened | `-C POLAR -K 120 -N 160 --enc-fb-noise 0.7 --pct-type SHORTLAST --dec-type ASCL -L 8 --crc-poly 24-LTEA` |
+| Turbo LTE (mother code) | `-C TURBO -K 424 --enc-sub-std LTE -i 6 --dec-sub-simd INTER` |
+| Turbo CCSDS | `-C TURBO -K 1784 --enc-sub-std CCSDS -i 10 --dec-sub-max MAXS` |
+| BCH, Reed-Solomon | `-C BCH -N 255 -K 239 -T 2`, `-C RS -N 127 -K 101 -T 13` |
+| Convolutional, Viterbi | `-C CONV --enc-poly {0171,0133} --dec-type VITERBI -K 64` |
+| RSC, double binary RSC and turbo (DVB-RCS2) | `-C RSC -K 1024 --dec-simd INTER`, `-C TURBO_DB -K 1504 -N 1880 --enc-sub-std DVB-RCS2 --crc-poly 32-GZIP` |
+| Turbo product code | `-C TPC -K 120 -N 127 --enc-ext -T 1 --dec-ite 8 --dec-p 4` |
+| Polar variants, repetition, RA, uncoded | `-C POLAR_MK ...`, `-C POLAR_PAC ...`, `-C POLAR_PT ...`, `-C REP -K 128 -N 512`, `-C RA -K 256 -N 1024`, `-C UNCODED -K 256` |
 
-Give a list of decoder objects to the FEC Extended Decoder (Parallelism 1, Dimension 1
-= number of decoders) and choose `capillary` (power of 2) or `ordinary` threading.
-Each object owns its AFF3CT modules: nothing is shared between threads.
+`print(aff3ct.codec_help("LDPC"))` lists the options of a code type.
 
-## Performance
+## Speed
 
-AMD Ryzen 9 9950X3D, K = 424, N = 1284 (rate 1/3), 6 iterations, int16, measured through
-GNU Radio (vector source, FEC Extended Decoder, null sink), information throughput:
+* `-p 16` in the command line, as in the simulator, selects the fixed point decoder: twice
+  the throughput of the float one for this LDPC code, for 0.1 dB. Remove it to decode in
+  float.
+* Give a list of decoders to the FEC Extended Decoder to use several cores.
 
-| SIMD build | Frames per call | 1 decoder | 2 decoders | 4 decoders |
-|---|---|---|---|---|
-| SSE4.2 (`-msse4.2`) | 8 | 40 Mb/s | 81 Mb/s | 160 Mb/s |
-| AVX2 (`-mavx2 -mfma`) | 16 | 71 Mb/s | 145 Mb/s | 271 Mb/s |
-| AVX-512 (`-march=native`) | 32 | 70 Mb/s | 132 Mb/s | 262 Mb/s |
+The example above (5G LDPC code (1024,512), 10 iterations) on an AMD Ryzen 9 9950X3D with
+AVX-512: 33 Mb/s per core, 121 Mb/s with 4 decoders.
 
-(multiple decoders: `capillary` threading.) INTRA, SSE4.2, 1 decoder: 15 Mb/s.
+## More
 
-Error correction is identical to the AFF3CT simulator (`aff3ct -C TURBO -K 424
---enc-sub-std LTE --dec-sub-simd INTER -p 16 -i 6`), e.g. FER 6e-1 at Eb/N0 = 0.5 dB,
-1.4e-1 at 1 dB, 7e-3 to 8e-3 at 1.5 dB.
-
-## Build and install
-
-Requirements: GNU Radio 3.10 with its development files, CMake, a C++17 compiler,
-pybind11.
-
-```bash
-sudo apt install gnuradio-dev pybind11-dev python3-pybind11 cmake g++ git
-```
-
-### 1. AFF3CT as a shared library
-
-```bash
-git clone --recursive https://github.com/aff3ct/aff3ct.git
-cd aff3ct
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_CXX_FLAGS="-march=native -faligned-new" \
-      -DAFF3CT_COMPILE_EXE=OFF -DAFF3CT_COMPILE_SHARED_LIB=ON \
-      -DCMAKE_INSTALL_PREFIX=$HOME/.local/aff3ct
-cmake --build build -j$(nproc)
-cmake --install build
-```
-
-`-march=native` selects the best SIMD instruction set of the machine (SSE4.2, AVX2 or
-AVX-512 on x86, NEON on ARM). To target a given instruction set instead, e.g. to run the
-same binaries on several machines, replace it with `-msse4.2` or `-mavx2 -mfma`.
-
-**gr-aff3ct must be compiled with the same SIMD flags as AFF3CT**: the register width
-fixes the number of frames decoded together and the buffer alignment. gr-aff3ct uses
-`-march=native` by default; otherwise pass `-DGR_AFF3CT_NATIVE=OFF
--DCMAKE_CXX_FLAGS="-mavx2 -mfma"` (same flags as AFF3CT). A mismatch is detected when
-a decoder is created ("AFF3CT and gr-aff3ct were built with different SIMD instruction
-sets"). The three x86 variants (SSE4.2, AVX2, AVX-512) pass the QA tests.
-
-### 2. gr-aff3ct
-
-```bash
-cd gr-aff3ct
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_PREFIX_PATH=$HOME/.local/aff3ct \
-      -DCMAKE_INSTALL_PREFIX=/usr/local      # or $HOME/.local, see below
-cmake --build build -j$(nproc)
-sudo cmake --install build && sudo ldconfig
-cd build && ctest -V                         # QA tests
-```
-
-The installed libraries carry an RPATH, so `LD_LIBRARY_PATH` is not needed.
-
-Installing in `$HOME/.local` (no sudo): Python finds the module through the user
-site-packages, but GRC must be told where the blocks are, in
-`~/.config/gnuradio/config.conf` (absolute path, `~` is not expanded by GRC):
-
-```ini
-[grc]
-local_blocks_path = /home/<user>/.local/share/gnuradio/grc/blocks
-```
-
-### Raspberry Pi
-
-Same procedure on a 64-bit OS (Raspberry Pi OS 64-bit or Ubuntu arm64), natively on the
-Pi: `-march=native` selects NEON. Building AFF3CT takes a while; use
-`-j2` or `-j3` on a Pi with 4 GB of RAM or less. Not tested yet.
-
-## Tests
-
-`python/aff3ct/qa_turbo.py` (run by `ctest`): noiseless round trips through the gr-fec
-Extended blocks (LTE and random interleavers, puncturing, repetition, int16 and float,
-INTER and SEQ), a BER check on AWGN, sizes reported to gr-fec, rejection of N < K + 12.
+* [docs/details.md](docs/details.md): formats, frames per call, packets, options, SIMD,
+  building from the sources.
+* [docs/validation.md](docs/validation.md): throughput and error rates, checked against
+  the AFF3CT simulator.
 
 ## License
 

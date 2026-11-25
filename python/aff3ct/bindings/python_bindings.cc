@@ -21,8 +21,9 @@ namespace py = pybind11;
 // Please do not delete
 /**************************************/
 // BINDING_FUNCTION_PROTOTYPES(
-void bind_turbo_encoder(py::module& m);
-void bind_turbo_decoder(py::module& m);
+void bind_codec_encoder(py::module& m);
+void bind_codec_decoder(py::module& m);
+void bind_codec_help(py::module& m);
 // ) END BINDING_FUNCTION_PROTOTYPES
 
 
@@ -53,7 +54,8 @@ PYBIND11_MODULE(aff3ct_python, m)
     // Please do not delete
     /**************************************/
     // BINDING_FUNCTION_CALLS(
-    bind_turbo_encoder(m);
-    bind_turbo_decoder(m);
+    bind_codec_encoder(m);
+    bind_codec_decoder(m);
+    bind_codec_help(m);
     // ) END BINDING_FUNCTION_CALLS
 }

@@ -3,7 +3,10 @@ version: 1.0
 brief: AFF3CT forward error correction codes as gr-fec encoders and decoders
 tags:
   - fec
-  - turbo
+  - polar
+  - ldpc
+  - bch
+  - reed-solomon
   - aff3ct
 author:
   - Mathieu Léonardon <mathieu.leonardon@imt-atlantique.fr>

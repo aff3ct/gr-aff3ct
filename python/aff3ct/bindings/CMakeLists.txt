@@ -24,8 +24,13 @@ include(GrPybind)
 # Python Bindings
 ########################################################################
 
-list(APPEND aff3ct_python_files turbo_encoder_python.cc turbo_decoder_python.cc
-     python_bindings.cc)
+list(
+    APPEND
+    aff3ct_python_files
+    codec_decoder_python.cc
+    codec_encoder_python.cc
+    codec_help_python.cc
+    python_bindings.cc)
 
 gr_pybind_make_oot(aff3ct ../../.. gr::aff3ct "${aff3ct_python_files}")
 
