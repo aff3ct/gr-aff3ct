@@ -73,7 +73,8 @@ for a bit 0**. Give the same command line to both.
 
 In GNU Radio Companion: add an *AFF3CT Codec Encoder Definition* and an *AFF3CT Codec
 Decoder Definition* (category AFF3CT) and give their ids to the FEC blocks.
-`examples/aff3ct_codec_ber.grc` is a complete BER test on an AWGN channel.
+`examples/aff3ct_codec_ber.grc` is a complete BER test on an AWGN channel; step by step
+guide in [docs/grc.md](docs/grc.md).
 
 ## Codes
 
@@ -108,6 +109,7 @@ AVX-512: 33 Mb/s per core, 121 Mb/s with 4 decoders.
 
 * [docs/details.md](docs/details.md): formats, frames per call, packets, options, SIMD,
   building from the sources.
+* [docs/grc.md](docs/grc.md): using the blocks in GNU Radio Companion.
 * [docs/validation.md](docs/validation.md): throughput and error rates, checked against
   the AFF3CT simulator.
 
